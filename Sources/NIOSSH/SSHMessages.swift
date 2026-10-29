@@ -221,6 +221,9 @@ extension SSHMessage {
             case session
             case forwardedTCPIP(ForwardedTCPIP)
             case directTCPIP(DirectTCPIP)
+            /// OpenSSH's "auth-agent@openssh.com": the server reaching back to the
+            /// client's agent after a session asked for agent forwarding.
+            case agent
         }
 
         struct ForwardedTCPIP: Equatable {
@@ -319,6 +322,8 @@ extension SSHMessage {
             case windowChange(WindowChange)
             case xonXoff(Bool)
             case signal(String)
+            /// OpenSSH's "auth-agent-req@openssh.com": forward the client's agent to this session.
+            case agentForwarding
             case unknown
         }
 
@@ -880,6 +885,9 @@ extension ByteBuffer {
 
                 type = .directTCPIP(.init(hostToConnectTo: hostToConnectTo, portToConnectTo: UInt16(portToConnectTo), originatorAddress: originator))
 
+            case "auth-agent@openssh.com":
+                type = .agent
+
             default:
                 throw NIOSSHError.unknownPacketType(diagnostic: "Channel request with \(typeRawValue)")
             }
@@ -1075,6 +1083,8 @@ extension ByteBuffer {
                     return nil
                 }
                 type = .signal(signalName)
+            case "auth-agent-req@openssh.com":
+                type = .agentForwarding
             default:
                 type = .unknown
             }
@@ -1385,6 +1395,9 @@ extension ByteBuffer {
 
         case .directTCPIP:
             writtenBytes += self.writeSSHString("direct-tcpip".utf8)
+
+        case .agent:
+            writtenBytes += self.writeSSHString("auth-agent@openssh.com".utf8)
         }
 
         writtenBytes += self.writeInteger(message.senderChannel)
@@ -1408,6 +1421,9 @@ extension ByteBuffer {
             writtenBytes += self.writeInteger(UInt32(data.portToConnectTo))
             writtenBytes += self.writeSSHString((data.originatorAddress.ipAddress ?? "<nio-error>").utf8)
             writtenBytes += self.writeInteger(UInt32(data.originatorAddress.port ?? -1))
+
+        case .agent:
+            break
         }
 
         return writtenBytes
@@ -1502,6 +1518,8 @@ extension ByteBuffer {
             writtenBytes += self.writeSSHString("xon-xoff".utf8)
         case .signal:
             writtenBytes += self.writeSSHString("signal".utf8)
+        case .agentForwarding:
+            writtenBytes += self.writeSSHString("auth-agent-req@openssh.com".utf8)
         case .unknown:
             preconditionFailure()
         }
@@ -1541,6 +1559,8 @@ extension ByteBuffer {
             writtenBytes += self.writeSSHBoolean(clientCanDo)
         case .signal(let name):
             writtenBytes += self.writeSSHString(name.utf8)
+        case .agentForwarding:
+            break
         case .unknown:
             preconditionFailure()
         }

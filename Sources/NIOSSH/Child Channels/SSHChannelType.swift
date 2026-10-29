@@ -114,6 +114,11 @@ extension SSHChannelType {
             self = .directTCPIP(.init(targetHost: message.hostToConnectTo, targetPort: message.portToConnectTo, originatorAddress: message.originatorAddress))
         case .forwardedTCPIP(let message):
             self = .forwardedTCPIP(.init(listeningHost: message.hostListening, listeningPort: message.portListening, originatorAddress: message.originatorAddress))
+        case .agent:
+            // There is no public case for agent channels, so that code switching over
+            // channel types keeps compiling; they only ever reach the handler's
+            // agent forwarding initializer, which is told nothing more anyway.
+            self = .session
         }
     }
 }

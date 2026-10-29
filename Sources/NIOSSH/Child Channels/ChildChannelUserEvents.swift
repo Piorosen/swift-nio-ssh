@@ -338,8 +338,25 @@ extension SSHChannelRequestEvent {
             return LocalFlowControlRequest(clientCanDo: clientCanDo) as Any
         case .signal(let signalName):
             return SignalRequest(signal: signalName)
+        case .agentForwarding:
+            return AgentForwardingRequest(wantReply: message.wantReply) as Any
         case .unknown:
             return nil
+        }
+    }
+}
+
+extension SSHChannelRequestEvent {
+    /// Asks the server to forward the client's SSH agent to this session
+    /// (OpenSSH's "auth-agent-req@openssh.com"). The server then opens agent
+    /// channels for programs in the session that want the agent; see
+    /// `NIOSSHHandler.setAgentForwardingInitializer(_:)`.
+    public struct AgentForwardingRequest: Hashable, NIOSSHSendable {
+        /// Whether a reply to this request is desired.
+        public var wantReply: Bool
+
+        public init(wantReply: Bool) {
+            self.wantReply = wantReply
         }
     }
 }
@@ -416,6 +433,13 @@ extension SSHMessage {
     init(_ event: SSHChannelRequestEvent.LocalFlowControlRequest, recipientChannel: UInt32) {
         let message = SSHMessage.ChannelRequestMessage(recipientChannel: recipientChannel,
                                                        type: .xonXoff(event.clientCanDo),
+                                                       wantReply: event.wantReply)
+        self = .channelRequest(message)
+    }
+
+    init(_ event: SSHChannelRequestEvent.AgentForwardingRequest, recipientChannel: UInt32) {
+        let message = SSHMessage.ChannelRequestMessage(recipientChannel: recipientChannel,
+                                                       type: .agentForwarding,
                                                        wantReply: event.wantReply)
         self = .channelRequest(message)
     }

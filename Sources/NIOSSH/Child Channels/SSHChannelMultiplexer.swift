@@ -31,6 +31,9 @@ final class SSHChannelMultiplexer {
 
     private var childChannelInitializer: SSHChildChannel.Initializer?
 
+    /// Sets up agent channels the server opens; without it they are refused.
+    var agentChannelInitializer: ((Channel) -> EventLoopFuture<Void>)?
+
     /// Whether new channels are allowed. Set to `false` once the parent channel is shut down at the TCP level.
     private var canCreateNewChannels: Bool
 
@@ -53,6 +56,7 @@ final class SSHChannelMultiplexer {
     func parentHandlerRemoved() {
         self.delegate = nil
         self.childChannelInitializer = nil
+        self.agentChannelInitializer = nil
         self.canCreateNewChannels = false
     }
 }
@@ -108,6 +112,14 @@ extension SSHChannelMultiplexer {
         let channel: SSHChildChannel?
 
         switch message {
+        case .channelOpen(let message) where message.type == .agent:
+            // Agent channels go to their own initializer, never the general one,
+            // and are refused (the initializer fails) when nobody asked for them.
+            let agentInitializer = self.agentChannelInitializer
+            channel = try self.openNewChannel { channel, _ in
+                agentInitializer?(channel) ?? channel.eventLoop.makeFailedFuture(NIOSSHError.channelSetupRejected(reasonCode: 1, reason: "agent forwarding was not requested"))
+            }
+
         case .channelOpen:
             channel = try self.openNewChannel(initializer: self.childChannelInitializer)
 

@@ -237,6 +237,14 @@ extension NIOSSHHandler: ChannelDuplexHandler {
 // MARK: Create a child channel
 
 extension NIOSSHHandler {
+    /// Accepts the agent channels a server opens once a session asked for agent
+    /// forwarding (`SSHChannelRequestEvent.AgentForwardingRequest`), running
+    /// `initializer` on each; with nil, they are refused, as they are by default.
+    /// Must be called on the handler's event loop.
+    public func setAgentForwardingInitializer(_ initializer: ((Channel) -> EventLoopFuture<Void>)?) {
+        self.multiplexer?.agentChannelInitializer = initializer
+    }
+
     /// Creates an SSH channel.
     ///
     /// This function is **not** thread-safe: it may only be called from on the channel.
